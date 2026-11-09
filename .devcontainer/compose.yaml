@@ -1,0 +1,35 @@
+services:
+  python:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ..:/workspaces/project:cached
+    working_dir: /workspaces/project
+    network_mode: service:playwright
+    environment:
+      PLAYWRIGHT_WS_ENDPOINT: ws://127.0.0.1:3000/
+    depends_on:
+      playwright:
+        condition: service_healthy
+
+  playwright:
+    # Keep this version aligned with the Python dependency in pyproject.toml.
+    image: mcr.microsoft.com/playwright:v1.65.0-noble
+    init: true
+    user: pwuser
+    working_dir: /home/pwuser
+    shm_size: 1gb
+    command:
+      - /bin/sh
+      - -c
+      - npx --yes playwright@1.65.0 run-server --port 3000 --host 127.0.0.1
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "const s = require('net').connect(3000, '127.0.0.1'); s.on('connect', () => { s.end(); process.exit(0); }); s.on('error', () => process.exit(1));"
+      interval: 5s
+      timeout: 3s
+      retries: 30

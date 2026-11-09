@@ -1,0 +1,9 @@
+{
+  "browser": {
+    "browserName": "chromium",
+    "remoteEndpoint": {
+      "endpoint": "ws://127.0.0.1:3000/?browser=chromium",
+      "exposeNetwork": "<loopback>"
+    }
+  }
+}

@@ -1,0 +1,4 @@
+[flake8]
+max-complexity = 10
+select = C90,F,E9
+extend-exclude = .venv,.git,__pycache__,.pytest_cache,.playwright-cli,output

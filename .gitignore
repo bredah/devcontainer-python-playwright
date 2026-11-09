@@ -1,0 +1,36 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+test-results/
+playwright-report/
+.playwright-cli/
+.agents/skills/code-context-graph/graph.sqlite*
+.ipynb_checkpoints/
+notes/output/
+notes/Untitled*.ipynb
+
+# Local exports and unrelated generated data
+/output/
+/docker-test-results/
+
+# Packaging and quality tool artifacts
+build/
+dist/
+*.egg-info/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.mypy_cache/
+.cache/
+
+# Editor, OS and local environment files
+.DS_Store
+.idea/
+*.swp
+*.swo
+.env
+.env.*
+!.env.example
