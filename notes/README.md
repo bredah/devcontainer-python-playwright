@@ -73,3 +73,36 @@ application-specific variables there. Use `make source=.env notes` or
 read before creating a session; rerun setup after configuration changes, closing
 any prior session first. Keep the remote browser endpoint supplied by the
 devcontainer, and do not put secrets in notebook cells or outputs.
+
+## Troubleshooting connection failures
+
+`ERR_SOCKS_CONNECTION_FAILED` while opening `http://127.0.0.1:8765` can mean the
+remote browser's loopback tunnel cannot reach the demo server. A successful
+browser connection does not start the application. Run `make demo` in a separate
+terminal **inside the same devcontainer** and keep it running, then restart the
+notebook kernel and run setup again. API requests need this server as well.
+
+Notebook session setup checks TCP reachability before opening Playwright resources
+and reports a direct `Cannot reach ...; run make demo` error when it is unavailable.
+For a different application, verify `BASE_URL` instead of starting the demo.
+If you recently changed Compose networking, rebuild and reopen the devcontainer;
+already running containers retain their previous network settings.
+
+## Kernel discovery
+
+Select **Python (project .venv)** (`project-python`). `make notes`,
+`make notes-install` and devcontainer creation register it inside the Poetry
+virtual environment using an absolute interpreter path. After registration,
+refresh JupyterLab or reselect the kernel in VS Code. If VS Code is running on
+the host, reopen the folder in the devcontainer first; a Linux virtual environment
+cannot run as a macOS host interpreter.
+
+To register manually inside the devcontainer:
+
+```bash
+poetry run python -m ipykernel install --sys-prefix --name project-python --display-name "Python (project .venv)"
+```
+
+The kernelspec lives under `.venv/share/jupyter/kernels/project-python`; recreate
+it after replacing or relocating `.venv`. If discovery still fails, run
+`poetry run jupyter kernelspec list` inside the same environment as JupyterLab.

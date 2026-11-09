@@ -99,9 +99,11 @@ docker-test-e2e:
 notes-install:
 	@printf "\n[%s]\n\n" "$@"
 	$(LOAD_ENV) $(POETRY) install --with notebooks
+	$(LOAD_ENV) $(POETRY) run python -m ipykernel install --sys-prefix --name project-python --display-name "Python (project .venv)"
 
 notes:
 	@printf "\n[%s]\n\n" "$@"
+	$(LOAD_ENV) $(POETRY) run python -m ipykernel install --sys-prefix --name project-python --display-name "Python (project .venv)"
 	$(LOAD_ENV) PROJECT_JUPYTER_PORT="$(JUPYTER_PORT)" $(POETRY) run python scripts/start_notes.py
 
 demo:

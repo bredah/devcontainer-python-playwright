@@ -6,7 +6,7 @@
   "shutdownAction": "stopCompose",
   "remoteUser": "nonroot",
   "updateRemoteUserUID": true,
-  "postCreateCommand": "poetry install --with notebooks,quality --no-interaction",
+  "postCreateCommand": "poetry install --with notebooks,quality --no-interaction && poetry run python -m ipykernel install --sys-prefix --name project-python --display-name 'Python (project .venv)'",
   "forwardPorts": [8888],
   "portsAttributes": {
     "8888": {"label": "Local JupyterLab", "onAutoForward": "silent"},
@@ -20,7 +20,11 @@
         "ms-python.python",
         "ms-python.vscode-pylance",
         "ms-python.debugpy",
-        "ms-toolsai.jupyter"
+        "ms-toolsai.jupyter",
+        "ms-toolsai.jupyter-keymap",
+        "ms-python.vscode-python-envs",
+        "ms-python.black-formatter",
+        "ms-python.isort"
       ],
       "settings": {
         "remote.localPortHost": "localhost",

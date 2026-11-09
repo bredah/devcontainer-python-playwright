@@ -2,14 +2,34 @@
 
 import asyncio
 import os
+import socket
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
+from urllib.parse import urlsplit
 
 from playwright.sync_api import sync_playwright
 
 from api import TasksAPI
 from components import DemoApp
 from environment import load_environment
+
+
+def check_target(base_url: str) -> None:
+    """Fail before creating Playwright resources when the target is unavailable."""
+    target = urlsplit(base_url)
+    if target.scheme not in {"http", "https"} or not target.hostname:
+        raise ValueError("BASE_URL must be an absolute http:// or https:// URL.")
+    port = target.port or (443 if target.scheme == "https" else 80)
+    try:
+        with socket.create_connection((target.hostname, port), timeout=3):
+            pass
+    except OSError as error:
+        raise ConnectionError(
+            f"Cannot reach {target.hostname}:{port}. For the local examples, run "
+            "`make demo` in another terminal inside the same devcontainer and "
+            "keep it running. Then rerun the notebook setup. For another target, "
+            "check BASE_URL and its network connectivity."
+        ) from error
 
 
 class NotebookSession:
@@ -37,6 +57,7 @@ class NotebookSession:
         load_environment()
 
         def initialize():
+            check_target(base_url)
             playwright = self._stack.enter_context(sync_playwright())
             if mode == "api":
                 context = playwright.request.new_context(base_url=base_url)

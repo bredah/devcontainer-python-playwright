@@ -435,3 +435,28 @@ retain their old network configuration until recreated. Internet access remains
 available for installing packages and accessing intended target websites. Loopback
 binding prevents LAN exposure, but local processes and code running in the shared
 container namespace can still reach these services.
+
+Notebook kernel: select **Python (project .venv)** (`project-python`). It is registered
+with an absolute interpreter path during devcontainer creation, `make notes-install`
+and `make notes`. Refresh JupyterLab after registering a kernel. For VS Code,
+reopen in the devcontainer before selecting it; see [kernel troubleshooting](notes/README.md#kernel-discovery).
+
+## VS Code extensions and format-on-save
+
+Open the repository with **Dev Containers: Reopen in Container**. Python, Jupyter,
+Black Formatter and isort must be installed in the **Dev Container** extension host,
+not only on the local computer. If an extension says it is disabled because it
+runs in the Remote Extension Host, open its Extensions page and select
+**Install in Dev Container: Python · Chainguard**, then run
+**Developer: Reload Window** if needed. Rebuilding the devcontainer installs the
+extensions declared in `.devcontainer/devcontainer.json`.
+
+Workspace configuration lives in `.vscode/settings.json` and recommendations in
+`.vscode/extensions.json`. Python files use Black on save; isort organizes imports
+on explicit saves. Both use the selected `.venv` environment and the project's
+`pyproject.toml` settings. Save-time formatting applies to Python files, independently
+of the pre-commit hooks. Notebook kernel selection is separate: select
+**Python (project .venv)** or the `/workspaces/project/.venv/bin/python` environment.
+When opening notebooks directly in VS Code, `make notes` is not required; it starts
+the browser-based JupyterLab interface only. The demo server still needs `make demo`
+for the example API and web flows.
