@@ -1,0 +1,56 @@
+# Dependency security reports
+
+`make security` uses `scripts/security_reports.py` (Python 3.11+, standard library)
+and Docker. It does not depend on Poetry being installed on the scanning host.
+`make sbom` and `make sarif` are aliases for the same complete generation process.
+Do not run these host targets inside the devcontainer unless Docker access has
+been deliberately provided; the default devcontainer does not mount its socket.
+
+## Scope
+
+- Inputs: only `pyproject.toml` and `poetry.lock`, copied to a read-only mount.
+- Inventory: all locked Python dependencies, across main/dev/notebooks/quality.
+- Scanner: Trivy 0.76.2, pinned by its multi-platform image digest in the script.
+- Outputs: CycloneDX JSON, SARIF 2.1.0 and metadata under `reports/security/`.
+- Excluded: secrets, application source, notebooks/outputs and installed OS/browser packages.
+
+The SBOM is generated without vulnerability scanning, then scanned against the
+advisory database to produce SARIF. Every locked package/version must be present
+in the inventory; missing entries cause an error. SARIF findings are not an
+inventory: zero results means no matching known findings, not zero dependencies
+or proof that the packages are safe.
+
+## Reproducibility and delivery
+
+Direct dependency versions use exact `==` constraints. The lockfile records exact
+transitive versions and archive hashes. Updating manifest constraints and the lock
+must be reviewed together. The report metadata contains the lockfile SHA-256 so
+DevSecOps can identify which dependency set was analyzed.
+
+Scanner identity is immutable by digest; its advisory database is refreshed and
+cached under ignored `.cache/trivy/`. New advisories can change findings even when
+versions remain identical. CycloneDX metadata also records generation details.
+Retain the SBOM, SARIF and scan metadata together as the delivery record.
+
+The workflow runs the generation after test result consolidation with `always()`,
+and uploads available outputs as `devsecops-dependency-reports` for 30 days. A
+partial artifact after scanner failure is not a completed scan; check that the
+job succeeded and `scan-metadata.json` exists. This setup delivers artifacts rather
+than publishing to GitHub Code Scanning or an external vulnerability platform.
+
+By default known vulnerabilities do not make generation fail (`--exit-code 0`);
+scanner errors and incomplete inventory do fail. A severity-based enforcement gate
+can be added after DevSecOps defines its policy. No findings are silently filtered.
+
+## Validation
+
+```bash
+poetry check --lock
+poetry run python scripts/test_security_reports.py
+make security
+```
+
+The scanner requires network access for its container image and OCI advisory DB.
+It has a read-only root filesystem, no added capabilities, no Docker socket and
+only temporary manifest, cache and output mounts. It does not source the local
+`.env`; Jupyter/API credentials are not forwarded.

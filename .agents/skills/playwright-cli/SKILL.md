@@ -8,8 +8,8 @@ allowed-tools: Bash(poetry run playwright cli:*) Bash(poetry run pytest:*)
 
 ## Project context lookup
 
-For symbol discovery, follow the repository's `AGENTS.md` and consult the local
-`code-context-graph` skill when available. It provides the persistent Python index;
+For code-content or symbol discovery in this repository, follow `AGENTS.md` and
+use the local `code-context-graph` skill first; this is required, not optional. It provides the persistent Python index;
 this browser skill does not maintain or implement the graph. Read current source
 when changing behavior or when indexed metadata is insufficient.
 

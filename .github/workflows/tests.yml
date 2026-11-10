@@ -1,0 +1,227 @@
+name: API, web and e2e tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Test suite to run
+        type: choice
+        required: true
+        default: all
+        options: [all, api, web, e2e]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.suite }} tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.suite != 'all' && format('["{0}"]', inputs.suite) || '["api","web","e2e"]') }}
+    env:
+      TEST_IMAGE: python-playwright-tests:ci
+      TEST_CONTAINER: tests-${{ matrix.suite }}
+      TEST_SUITE: ${{ matrix.suite }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Build test image
+        id: build
+        run: docker build --tag "$TEST_IMAGE" .
+
+      - name: Run tests and generate HTML and JUnit reports
+        id: execute
+        run: |
+          docker run --name "$TEST_CONTAINER" --init --shm-size=1g \
+            "$TEST_IMAGE" "tests/$TEST_SUITE" -v \
+            --html="reports/$TEST_SUITE.html" --self-contained-html \
+            --junitxml="reports/$TEST_SUITE.xml"
+
+      - name: Collect reports even when tests fail
+        if: always()
+        run: |
+          if docker container inspect "$TEST_CONTAINER" >/dev/null 2>&1; then
+            mkdir -p reports test-results
+            docker cp "$TEST_CONTAINER:/app/reports/." reports/
+            docker cp "$TEST_CONTAINER:/app/test-results/." test-results/
+          fi
+
+      - name: Attach standalone HTML report
+        id: html
+        if: ${{ always() && hashFiles(format('reports/{0}.html', matrix.suite)) != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ${{ matrix.suite }}-html-report
+          path: reports/${{ matrix.suite }}.html
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Record suite execution status
+        if: always()
+        env:
+          TEST_OUTCOME: ${{ steps.execute.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          REPORT_URL: ${{ steps.html.outputs.artifact-url }}
+        run: |
+          mkdir -p reports
+          python3 - <<'PYTHON'
+          import json, os
+          from pathlib import Path
+          status = {key: os.environ.get(key, "") for key in (
+              "TEST_SUITE", "TEST_OUTCOME", "BUILD_OUTCOME", "REPORT_URL"
+          )}
+          Path("reports/status.json").write_text(json.dumps(status))
+          PYTHON
+
+      - name: Upload suite results for final aggregation
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ${{ matrix.suite }}-results
+          path: reports/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attach JUnit and browser diagnostics
+        if: ${{ always() && hashFiles('reports/*.xml', 'test-results/**') != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ${{ matrix.suite }}-diagnostics
+          path: |
+            reports/*.xml
+            test-results/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Link report from the job summary
+        if: always()
+        env:
+          REPORT_URL: ${{ steps.html.outputs.artifact-url }}
+        run: |
+          {
+            printf '## %s test report\n\n' "$TEST_SUITE"
+            if [ -n "$REPORT_URL" ]; then
+              printf '[Open or download the HTML report](%s)\n\n' "$REPORT_URL"
+              printf 'The report is self-contained. If a browser preview is unavailable, download and open the HTML file locally.\n'
+            else
+              printf 'No report was generated. Check the build and test logs.\n'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove test container
+        if: always()
+        run: docker rm -f "$TEST_CONTAINER" 2>/dev/null || true
+
+  results:
+    name: Consolidated test results
+    needs: test
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_SUITES: ${{ github.event_name == 'workflow_dispatch' && inputs.suite != 'all' && inputs.suite || 'api,web,e2e' }}
+    steps:
+      - name: Check out report aggregation script
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Download suite results
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: '*-results'
+          path: collected
+
+      - name: Consolidate results and preserve failures
+        if: always()
+        run: python3 scripts/aggregate_reports.py --input collected --output combined --suites "$EXPECTED_SUITES"
+
+      - name: Attach combined report bundle
+        if: ${{ always() && hashFiles('combined/index.html') != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: combined-test-reports
+          path: combined/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attach standalone results dashboard
+        id: dashboard
+        if: ${{ always() && hashFiles('combined/index.html') != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: test-results-dashboard
+          path: combined/index.html
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish final summary
+        if: always()
+        env:
+          DASHBOARD_URL: ${{ steps.dashboard.outputs.artifact-url }}
+        run: |
+          if [ -f combined/summary.md ]; then
+            cat combined/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -n "$DASHBOARD_URL" ]; then
+            printf '\n[Open consolidated HTML dashboard](%s)\n' "$DASHBOARD_URL" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  security:
+    name: DevSecOps dependency reports
+    needs: results
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out locked dependency manifests
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Generate dependency SBOM and SARIF
+        run: make security
+
+      - name: Attach DevSecOps reports
+        if: ${{ always() && hashFiles('reports/security/**') != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: devsecops-dependency-reports
+          path: reports/security/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summarize dependency analysis
+        if: always()
+        run: |
+          python3 - <<'PYTHON'
+          import json, os
+          from pathlib import Path
+          path = Path("reports/security/scan-metadata.json")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("## DevSecOps dependency reports\n\n")
+              if path.exists():
+                  data = json.loads(path.read_text())
+                  summary.write(f"Locked packages: {data['packages']}\n\n")
+                  summary.write(f"SARIF vulnerability findings: {data['sarif_findings']}\n\n")
+                  summary.write("Download devsecops-dependency-reports for CycloneDX SBOM, SARIF and scan metadata.\n")
+              else:
+                  summary.write("Generation failed; check scanner logs. Partial artifacts do not represent a completed scan.\n")
+          PYTHON

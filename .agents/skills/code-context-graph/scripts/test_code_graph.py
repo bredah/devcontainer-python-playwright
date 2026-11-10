@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from code_graph import query, refresh
+from code_graph import query, refresh, search
 
 
 class GraphTests(unittest.TestCase):
@@ -36,6 +36,58 @@ class GraphTests(unittest.TestCase):
             db, stats = refresh(root)
             self.assertEqual(stats["removed"], 1)
             self.assertEqual(query(db, "refs", "Form", 10), [])
+            db.close()
+
+    def test_search_code_docstrings_and_docs_with_limits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "src").mkdir()
+            (root / "src" / "form.py").write_text(
+                'def sendContact():\n    """Submit a contact form."""\n    pass\n'
+            )
+            (root / "README.md").write_text(
+                "Jupyter authentication requires a private token.\n"
+            )
+            (root / ".env").write_text("SECRET=never_index_this_value\n")
+            (root / "notes").mkdir()
+            (root / "notes" / "private.ipynb").write_text(
+                "never_index_notebook_outputs"
+            )
+            db, stats = refresh(root)
+            self.assertEqual(stats["files"], 2)
+            result = search(db, "where do we submit a contact form", 1)
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0]["path"], "src/form.py")
+            self.assertIn("Submit a contact", result[0]["snippet"])
+            self.assertLessEqual(len(result[0]["snippet"]), 600)
+            self.assertEqual(
+                search(db, "Jupyter authentication", 3)[0]["path"], "README.md"
+            )
+            self.assertEqual(search(db, "never_index_this_value", 3), [])
+            self.assertEqual(search(db, "never_index_notebook_outputs", 3), [])
+            self.assertEqual(search(db, "where is the", 3), [])
+            self.assertEqual(search(db, "contact", 3, "docs/"), [])
+            self.assertTrue(search(db, "send contact", 3, "src/"))
+            db.close()
+
+    def test_text_index_refresh_removes_obsolete_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text("Jupyter authentication token")
+            db, _ = refresh(root)
+            self.assertTrue(search(db, "authentication", 3))
+            db.close()
+            path.write_text("Browser navigation")
+            db, stats = refresh(root)
+            self.assertEqual(stats["reindexed"], 1)
+            self.assertEqual(search(db, "authentication", 3), [])
+            self.assertTrue(search(db, "navigation", 3))
+            db.close()
+            path.unlink()
+            db, stats = refresh(root)
+            self.assertEqual(stats["removed"], 1)
+            self.assertEqual(search(db, "navigation", 3), [])
             db.close()
 
     def test_syntax_error_does_not_replace_previous_index(self):

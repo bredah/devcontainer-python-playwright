@@ -32,8 +32,16 @@ help:
 	  'quality-install' 'Install quality tools' \
 	  'hooks-install' 'Install formatting and commit-message hooks' \
 	  'format' 'Apply isort and Black' \
-	  'lint' 'Check formatting, imports and complexity'; \
+	  'lint' 'Check formatting, imports and complexity' \
+	  'security (sbom, sarif)' 'Generate DevSecOps SBOM and vulnerability SARIF'; \
 	printf "\nExample: make source=.env test-api ARGS=-q\n\n"
+
+.PHONY: security sbom sarif
+sbom sarif: security
+
+security:
+	@printf "\n[%s]\n\n" "$@"
+	$(PYTHON) scripts/security_reports.py --docker "$(DOCKER)"
 
 PYTHON_PATHS = src tests scripts .agents/skills
 

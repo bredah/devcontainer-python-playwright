@@ -5,6 +5,7 @@ __pycache__/
 .ruff_cache/
 test-results/
 playwright-report/
+reports/
 .playwright-cli/
 .agents/skills/code-context-graph/graph.sqlite*
 .ipynb_checkpoints/

@@ -24,7 +24,7 @@ RUN poetry install --only main,dev --no-root --no-ansi
 
 COPY --chown=pwuser:pwuser src ./src
 COPY --chown=pwuser:pwuser tests ./tests
-RUN mkdir -p /app/test-results /app/.pytest_cache \
+RUN mkdir -p /app/test-results /app/reports /app/.pytest_cache \
     && chown -R pwuser:pwuser /app
 
 USER pwuser

@@ -7,7 +7,7 @@ RUN apk add --no-cache git openssh-client bash gnutar gzip libstdc++ posix-libc-
 
 # Keep Poetry isolated from the project's virtual environment.
 RUN python -m venv /opt/poetry \
-    && /opt/poetry/bin/python -m pip install --no-cache-dir 'poetry>=2,<3'
+    && /opt/poetry/bin/python -m pip install --no-cache-dir 'poetry==2.5.1'
 
 ENV PATH="/opt/poetry/bin:${PATH}"
 

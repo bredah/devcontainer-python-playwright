@@ -11,18 +11,36 @@ Interactive notebooks live in notes/; install their optional group with make not
 Reuse synchronous clients/components in Jupyter through src/notebooks/NotebookSession
 and return plain data from worker callbacks. Keep notebook outputs uncommitted.
 
-## Retrieve context selectively
+## Mandatory code-content discovery
 
-Before opening multiple source files, query the persistent symbol index:
+For every task that requires discovering or searching repository code, agents MUST
+read `.agents/skills/code-context-graph/SKILL.md` and query its index first. This
+applies even when the user does not explicitly name the skill. Use `search` for
+intent/keywords, `find` for symbols and `refs` for dependency candidates.
+
+Do not start discovery by recursively reading files or using rg/grep/find to search
+source contents. After an index query, read only the relevant returned source
+locations needed to verify behavior or make an edit. The index does not replace
+reading current code before changing it.
+
+Fallback is allowed only when the tool fails, a narrowed query has no useful
+results, or the requested content is outside the documented allowlist. State the
+reason briefly, then use bounded direct reads or targeted rg searches. Never expand
+the index to include secrets or generated outputs just to avoid a fallback.
+
+Example queries:
 
 ```bash
+python3 .agents/skills/code-context-graph/scripts/code_graph.py search "submit contact form" --limit 5
 python3 .agents/skills/code-context-graph/scripts/code_graph.py find ContactForm
 python3 .agents/skills/code-context-graph/scripts/code_graph.py find DemoApp.__init__
 python3 .agents/skills/code-context-graph/scripts/code_graph.py refs ContactForm
 python3 .agents/skills/code-context-graph/scripts/code_graph.py refs app --limit 8
 ```
 
-Each query refreshes changed/deleted Python files under `src` and `tests`.
+Each query refreshes changed/deleted files in the explicit code/documentation allowlist.
+Use search for task keywords, find for symbol metadata and refs for static candidates.
+Search is local lexical retrieval, without embeddings, external calls or file uploads.
 Use returned signatures, docstrings, constructor attributes and reference candidates
 to reuse existing APIs without rereading entire implementations. Narrow queries
 before increasing limits. Read current source around returned lines before editing
@@ -52,3 +70,12 @@ Bind application, demo and Playwright listeners to 127.0.0.1 only. The Compose
 services share a network namespace; do not publish Docker ports or add wildcard
 binds. Jupyter requires JUPYTER_TOKEN from the ignored local .env; use make env-init.
 Never display, stage or commit .env, tokens or generated artifacts.
+
+## Dependency inventory and security reports
+
+Keep direct Poetry requirements pinned with exact == versions and commit the
+lockfile alongside manifest changes. Run make security on a Docker-capable host
+to generate CycloneDX inventory and vulnerability SARIF for DevSecOps. These are
+distinct: SARIF findings do not list every package. Do not include local secrets
+in scanner mounts or generated artifacts. The final workflow job runs the same
+command after test consolidation, even when a test suite fails.
