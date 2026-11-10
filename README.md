@@ -230,8 +230,10 @@ The pinned Trivy image produces these files in `reports/security/`:
 | `sbom.cdx.json` | CycloneDX inventory of all packages/versions in the Poetry lockfile |
 | `dependencies.sarif` | SARIF 2.1.0 vulnerability findings for those dependencies |
 | `scan-metadata.json` | Scanner identity, lockfile SHA-256, package count and finding count |
+| `summary.md` | Human-readable findings and full package/version/group inventory |
 
-Deliver all three to DevSecOps. **SARIF is a findings format, not a complete package
+Deliver all four files to DevSecOps. Open `reports/security/summary.md` for a
+human-readable overview with findings and the complete dependency table. **SARIF is a findings format, not a complete package
 inventory**; a package with no known vulnerability may not appear as a SARIF result.
 The SBOM is checked against every locked package/version, including optional
 notebook and quality groups. This is a repository dependency inventory, not an

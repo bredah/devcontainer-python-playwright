@@ -12,6 +12,8 @@ import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
+from security_summary import render_summary
+
 TRIVY_IMAGE = "aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb"
 
 
@@ -50,13 +52,19 @@ def validate_pins(manifest, lock):
 def generate(root, output, docker):
     output.mkdir(parents=True, exist_ok=True)
     # A failed new scan must not leave a previous successful completion record.
-    for name in ("sbom.cdx.json", "dependencies.sarif", "scan-metadata.json"):
+    for name in (
+        "sbom.cdx.json",
+        "dependencies.sarif",
+        "scan-metadata.json",
+        "summary.md",
+    ):
         (output / name).unlink(missing_ok=True)
     cache = root / ".cache" / "trivy"
     cache.mkdir(parents=True, exist_ok=True)
     lock_path = root / "poetry.lock"
     lock = tomllib.loads(lock_path.read_text())
-    validate_pins(tomllib.loads((root / "pyproject.toml").read_text()), lock)
+    manifest = tomllib.loads((root / "pyproject.toml").read_text())
+    validate_pins(manifest, lock)
     with tempfile.TemporaryDirectory(prefix="dependency-input-") as directory:
         inputs = Path(directory)
         for name in ("pyproject.toml", "poetry.lock"):
@@ -126,6 +134,7 @@ def generate(root, output, docker):
         "note": "SBOM is inventory; SARIF contains vulnerability findings, not all packages.",
     }
     (output / "scan-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    (output / "summary.md").write_text(render_summary(lock, manifest, sarif, metadata))
     print(
         f"Generated SBOM ({count} packages) and SARIF ({findings} findings) in {output}"
     )
